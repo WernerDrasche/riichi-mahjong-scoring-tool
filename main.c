@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 char input[50];
 
@@ -485,11 +486,31 @@ retry:
         goto retry;
     }
     if (tile_count != 14) {
-        printf("Error: hand needs to consist of 14 tiles, got %i\n", tile_count);
+        printf("Error: hand needs to consist of 14 tiles\n");
         goto retry;
     }
+    uint8_t count[18][3] = {0};
     for (int i = 0; i < group_idx; ++i) {
-        score_info->hand[i] = hand[i];
+        current = hand[i];
+        if (is_wind(current.start.value))
+            current.start.color = RED;
+        uint8_t *ptr = &count[current.start.color][current.start.value];
+        switch (current.type) {
+            case QUAD:
+                ++(*ptr);
+            case TRIPLE:
+                ++(*ptr);
+            case PAIR: 
+                *ptr += 2;
+                break;
+            case SEQUENCE:
+                *(uint32_t *)ptr += 0x00010101;       
+        }
+        if (((~*(int32_t *)ptr) + 0x04040405) & 0x80808080) {
+            printf("Error: hand contains more than 4 of a kind\n");
+            goto retry;
+        }
+        score_info->hand[i] = current;
     }
     score_info->winning_tile = winning_tile;
     score_info->hand_size = group_idx;
