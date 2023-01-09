@@ -489,12 +489,13 @@ retry:
         printf("Error: hand needs to consist of 14 tiles\n");
         goto retry;
     }
-    uint8_t count[18][3] = {0};
+    uint8_t count[3][18] = {0};
     for (int i = 0; i < group_idx; ++i) {
         current = hand[i];
         if (is_wind(current.start.value))
             current.start.color = RED;
         uint8_t *ptr = &count[current.start.color][current.start.value];
+        //int32_t tmp4 = *(int32_t *)ptr;
         switch (current.type) {
             case QUAD:
                 ++(*ptr);
@@ -506,10 +507,18 @@ retry:
             case SEQUENCE:
                 *(uint32_t *)ptr += 0x00010101;       
         }
+        //print_group(current);
+        //putchar('\n');
+        //int32_t tmp0 = *(int32_t *)ptr;
+        //int32_t tmp1 = ~tmp0;
+        //int32_t tmp2 = tmp1 + 0x04040405;
+        //int32_t tmp3 = tmp2 & 0x80808080;
+        //printf("%x, %x, %x, %x, %x\n", tmp4, tmp0, tmp1, tmp2, tmp3);
         if (((~*(int32_t *)ptr) + 0x04040405) & 0x80808080) {
             printf("Error: hand contains more than 4 of a kind\n");
             goto retry;
         }
+        //TODO: this doesn't work
         score_info->hand[i] = current;
     }
     score_info->winning_tile = winning_tile;
