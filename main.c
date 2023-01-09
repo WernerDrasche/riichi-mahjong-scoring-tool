@@ -754,7 +754,7 @@ void check_melds(struct score_info *score_info) {
     else if (quads == 3)
         score_info->yaku[THREE_KONGS] = true;
 
-    if (triples + quads > 1) return;
+    if (triples + quads > 2) return;
     bool tpdc, pdc, triple_chow;
     tpdc = pdc = triple_chow = false;
     int other = 0;
