@@ -817,11 +817,10 @@ unsigned char calculate_fu_for_group(struct group group, const struct score_info
     if (group.type == SEQUENCE) return 0;
     if (group.type == PAIR) {
         if (group.start.value == score_info->winner) {
-            fu = 2;
             flag = true;
             printf("%-27s", "Pair of Seat Wind");
             print_group(group);
-            printf("%5c%-2u Fu\n", ' ', fu);
+            printf("%5c%-2u Fu\n", ' ', 2);
         }
         if (group.start.value == score_info->round_wind) {
             fu = 2;
@@ -1075,9 +1074,30 @@ int main(void) {
         .round_wind = EAST,
         .round = 1,
         .dealer = 0,
-        .players = {"Simon", "Reto", "Barbara", "Karolina"},
         .points = {30000, 30000, 30000, 30000},
     };
+    FILE *file = fopen("players.txt", "r");
+    if (file == NULL) {
+        printf("Error: can't load player names from file players.txt\n");
+        exit(EXIT_FAILURE);
+    }
+    char players_buf[100];
+    fgets(players_buf, sizeof(players_buf), file);
+    fclose(file);
+    char *player  = strtok(players_buf, ",");
+    int i;
+    for (i = 0; i < 4; ++i) {
+        if (player == NULL) break;
+        unsigned long len = strlen(player);
+        if (player[len - 1] == '\n')
+            player[len - 1] = 0;
+        state.players[i] = player;
+        player = strtok(NULL, ",");
+    }
+    if (i < 3) {
+        printf("Error: can't have less than 3 players");
+        exit(EXIT_FAILURE);
+    }
     struct score_info score_info;
     while (true) {
         printf("Round: %s %i\n", directions[state.round_wind - EAST], state.round);
