@@ -6,7 +6,7 @@
 
 char input[50];
 
-#define NUM_YAKU 40
+#define NUM_YAKU 41
 enum YAKU {
     MAHJONG_FIRST_ROUND,
     FOUR_KONGS,
@@ -51,8 +51,8 @@ enum YAKU {
     ROBBING_THE_KONG,
 };
 
-const unsigned char han_closed[] = {13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 6, 4, 2, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1};
-const unsigned char han_open[] =   {0,  13, 0,  13, 13, 13, 13, 13, 13, 0,  0,  5, 4, 2, 0, 2, 2, 0, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
+const unsigned char han_closed[] = {13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 6, 2, 2, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1};
+const unsigned char han_open[] =   {0,  13, 0,  13, 13, 13, 13, 13, 13, 0,  0,  5, 2, 2, 0, 2, 2, 0, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
 
 const char *yaku_names[] = {
     "Mahjong on first round",
@@ -227,7 +227,7 @@ unsigned char char_to_direction(char c) {
 
 enum ROUND_SUMMARY {WINNER, TSUMO, RON_FROM, BONUS, DRAW, YAKUMAN};
 
-int round_summary(struct score_info *score_info) {
+int round_summary(struct score_info *score_info, const struct state *game_state) {
 retry:
     printf("Round summary: ");
     if (read_line_to_input() < 0) return -1;
@@ -253,6 +253,10 @@ retry:
                 info.winner = char_to_direction(c);
                 if (!info.winner) {
                     error_expected("e|s|w|n", c);
+                    goto retry;
+                }
+                if (info.winner == NORTH && game_state->num_players == 3) {
+                    printf("Error: there is no north seat in a three-player game\n");
                     goto retry;
                 }
                 state = TSUMO;
@@ -293,6 +297,10 @@ retry:
                 }
                 if (info.from == info.winner) {
                     printf("Error: can't ron from winner\n");
+                    goto retry;
+                }
+                if (info.from == NORTH && game_state->num_players == 3) {
+                    printf("Error: there is no north seat in a three-player game\n");
                     goto retry;
                 }
                 state = BONUS;
@@ -538,20 +546,20 @@ int determine_wait(struct score_info *score_info) {
             if (tile.value - group.start.value < 3 && tile.color == group.start.color) {
                 found = true;
                 current = i;
-                if (tile.value == group.start.value + 1)
+                if (tile.value == group.start.value + 1) {
                     wait = CLOSED_WAIT;
-                else if ((tile.value == 3 && group.start.value == 1) || (tile.value == 7 && group.start.value == 7))
-                    wait = EDGE_WAIT;
-                else {
-                    wait = OPEN_WAIT;
                     break;
-                }
+                } else if ((tile.value == 3 && group.start.value == 1) || (tile.value == 7 && group.start.value == 7)) {
+                    wait = EDGE_WAIT;
+                    break;
+                } else wait = OPEN_WAIT;
             }
         } else if (group.type == PAIR) {
             if (tile.value == group.start.value && (is_wind(tile.value) || tile.color == group.start.color)) {
                 found = true;
                 current = i;
                 wait = PAIR_WAIT;
+                break;
             }
         } else {
             if (tile.value == group.start.value && (is_wind(tile.value) || tile.color == group.start.color)) {
@@ -698,7 +706,7 @@ void check_melds(struct score_info *score_info) {
                     colors = check_same_all_colors(group, score_info);
                     if (colors == 0b111) {
                         triple_pung = true;
-                        if (group.start.value == DRAGON && !little_three) {
+                        if (group.start.value == DRAGON) {
                             score_info->yaku[BIG_THREE_DRAGONS] = true;
                             little_three = true;
                         } else
@@ -706,7 +714,7 @@ void check_melds(struct score_info *score_info) {
                     }
                 }
                 if (group.start.value == DRAGON) {
-                    if (!little_three && colors >= 0b011) {
+                    if (!little_three && (colors & (colors - 1))) {
                         struct tile missing_dragon = {.value = DRAGON, .color = find_zero_bit(colors, 3)};
                         //printf("DEBUG: missing_color = %i\n", find_zero_bit(colors, 3));
                         struct group pair = {.type = PAIR, .start = missing_dragon};
@@ -738,7 +746,7 @@ void check_melds(struct score_info *score_info) {
     }
     if (winds == 0b1111)
         score_info->yaku[BIG_FOUR_WINDS] = true;
-    else if (winds >= 0b0111) {
+    else if (winds & (winds - 1)) {
         struct tile missing_wind = {.value = find_zero_bit(winds, 4)};
         struct group pair = {.type = PAIR, .start = missing_wind};
         score_info->yaku[LITTLE_FOUR_WINDS] = (bool)search_for_group(pair, score_info, -1);
@@ -891,6 +899,7 @@ void calculate_fu(struct score_info *score_info) {
             case PAIR_WAIT:
                 printf("%-34s%-2u Fu\n", "Pair Wait", wait);
                 break;
+            default: break;
         }
         tsumo = 0;
         if (score_info->tsumo) {
@@ -995,14 +1004,14 @@ int calculate_score(struct score_info *score_info, struct state *state) {
         if (score_info->winner == EAST) {
             ++state->honba_counter;
             printf("Score: %i\n", dealer);
-            for (int i = 0; i < 4; ++i) {
+            for (int i = 0; i < state->num_players; ++i) {
                 score_info->delta[i] = -dealer;
             }
             score_info->delta[0] = 3 * dealer;
         } else {
             printf("Score: (%i/%i)\n", rest, dealer);
             state->honba_counter = 0;
-            for (int i = 0; i < 4; ++i) {
+            for (int i = 0; i < state->num_players; ++i) {
                 score_info->delta[i] = -rest;
             }
             score_info->delta[0] = -dealer;
@@ -1098,12 +1107,13 @@ int main(void) {
         printf("Error: can't have less than 3 players");
         exit(EXIT_FAILURE);
     }
+    state.num_players = i;
     struct score_info score_info;
     while (true) {
         printf("Round: %s %i\n", directions[state.round_wind - EAST], state.round);
         print_scores(&score_info, &state, true);
         putchar('\n');
-        int limit_hand = round_summary(&score_info);
+        int limit_hand = round_summary(&score_info, &state);
         if (limit_hand < 0) break;
         else if (limit_hand > 0) {
             if (calculate_score(&score_info, &state) < 0) continue;
