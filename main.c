@@ -147,6 +147,68 @@ struct state {
     int points[4];
 };
 
+struct state_history {
+    struct state *states;
+    unsigned char len;
+    unsigned char undo_depth;
+    unsigned char push_depth;
+    char idx;
+    bool modified;
+};
+
+void init_state_history(struct state_history *history, unsigned char len) {
+    struct state *states = malloc(len * sizeof(struct state));
+    *history = (struct state_history){
+        .states = states,
+        .len = len,
+        .idx = -1,
+    };
+}
+
+void deinit_state_history(struct state_history *history) {
+    free(history->states);
+}
+
+void push_state(struct state_history *history, struct state *state) {
+    char idx = history->idx;
+    idx = (idx + 1) % history->len;
+    history->states[idx] = *state;
+    history->idx = idx;
+    history->undo_depth = 0;
+    if (history->push_depth < history->len)
+        ++history->push_depth;
+}
+
+int undo(struct state_history *history, struct state *state) {
+    if (!history->push_depth) {
+        printf("Error: nothing to undo\n");
+        return - 1;
+    }
+    char idx = history->idx - 1;
+    if (idx < 0)
+        idx += history->len;
+    history->idx = idx;
+    *state = history->states[idx];
+    history->modified = true;
+    ++history->undo_depth;
+    --history->push_depth;
+    return 0;
+}
+
+int redo(struct state_history *history, struct state *state) {
+    if (!history->undo_depth) {
+        printf("Error: nothing to redo\n");
+        return -1;
+    }
+    char idx = (history->idx + 1) % history->len;
+    history->idx = idx;
+    *state = history->states[idx];
+    history->modified = true;
+    ++history->push_depth;
+    --history->undo_depth;
+    return 0;
+}
+
 #define is_wind(V) (EAST <= V && V <= NORTH)
 #define is_honor(V) (is_wind(V) || V == DRAGON)
 #define is_terminal(V) (V == 1 || V == 9)
@@ -227,14 +289,25 @@ unsigned char char_to_direction(char c) {
 
 enum ROUND_SUMMARY {WINNER, TSUMO, RON_FROM, BONUS, DRAW, YAKUMAN};
 
-int round_summary(struct score_info *score_info, const struct state *game_state) {
+int round_summary(struct score_info *score_info, struct state *game_state, struct state_history *history) {
 retry:
     printf("Round summary: ");
     if (read_line_to_input() < 0) return -1;
+    //TODO
+    if (!strncmp(input, "undo", 4)) {
+        if (undo(history, game_state) < 0) goto retry;
+        return 0;
+    } else if (!strncmp(input, "redo", 4)) {
+        if (redo(history, game_state) < 0) goto retry;
+        return 0;
+    } else if (!strncmp(input, "save", 4)) {
+
+    } else if (!strncmp(input, "load", 4)) {
+
+    }
     bool limit_hand = false;
     struct score_info info = {0};
     enum ROUND_SUMMARY state = WINNER;
-    bool riichi_sticks = false;
     for (int i = 0; i < sizeof(input); ++i) {
         char c = input[i];
         if (c == ' ') continue;
@@ -262,14 +335,17 @@ retry:
                 state = TSUMO;
                 continue;
             case DRAW:
-                if (!riichi_sticks && '1' <= c && c <= '4') {
-                    info.riichi_sticks += c - 48;
-                    riichi_sticks = true;
+                if ('1' <= c && c <= '4') {
+                    info.riichi_sticks = c - 48;
                     continue;
                 }
                 unsigned char direction = char_to_direction(c);
                 if (!direction) {
                     error_expected("e|s|w|n|1..4", c);
+                    goto retry;
+                }
+                if (direction == NORTH && game_state->num_players == 3) {
+                    printf("Error: there is no north seat in a three-player game\n");
                     goto retry;
                 }
                 info.tenpai[direction - EAST] = true;
@@ -341,9 +417,10 @@ retry:
                     case 'Y':
                         state = YAKUMAN;
                         continue;
-                    case 's':
-                    case 'S':
-                        riichi_sticks = true;
+                    case '1':
+                    case '2':
+                    case '3':
+                        info.riichi_sticks = c - 48;
                         continue;
                     default:
                         error_expected("r|y", c);
@@ -370,9 +447,6 @@ retry:
                         goto retry;
                 }
         }
-    }
-    if (riichi_sticks && !info.draw) {
-        info.riichi_sticks = get_number("Enter number of additional riichi-sticks: ");
     }
     *score_info = info;
     return limit_hand;
@@ -1108,12 +1182,23 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
     state.num_players = i;
+    struct state_history history;
+    init_state_history(&history, 10);
+    push_state(&history, &state);
+    history.push_depth = 0;
     struct score_info score_info;
     while (true) {
         printf("Round: %s %i\n", directions[state.round_wind - EAST], state.round);
+        printf("Riichi-Sticks: %i\n", state.riichi_sticks);
+        printf("Honba Counter: %i\n\n", state.honba_counter);
         print_scores(&score_info, &state, true);
         putchar('\n');
-        int limit_hand = round_summary(&score_info, &state);
+        int limit_hand = round_summary(&score_info, &state, &history);
+        if (history.modified) {
+            history.modified = false;
+            printf("\n*--------------------------------------*\n\n");
+            continue;
+        }
         if (limit_hand < 0) break;
         else if (limit_hand > 0) {
             if (calculate_score(&score_info, &state) < 0) continue;
@@ -1134,7 +1219,7 @@ int main(void) {
         print_scores(&score_info, &state, false);
         putchar('\n');
         if (score_info.winner != EAST && (!score_info.draw || !score_info.tenpai[0])) {
-            if (state.round == 4) {
+            if (state.round == state.num_players) {
                 if (state.round_wind == SOUTH) {
                     printf("*--------------------------------------*\n\n");
                     print_scores(&score_info, &state, true);
@@ -1149,5 +1234,7 @@ int main(void) {
             }
         }
         printf("*--------------------------------------*\n\n");
+        push_state(&history, &state);
     }
+    deinit_state_history(&history);
 }
