@@ -4,7 +4,8 @@
 #include <string.h>
 #include <stdint.h>
 
-char input[50];
+char buffer[50];
+char *input;
 
 #define NUM_YAKU 41
 enum YAKU {
@@ -141,7 +142,7 @@ struct score_info {
 };
 
 struct state {
-    unsigned char num_players, round_wind, round, dealer;
+    unsigned char num_players, round_wind, round;
     unsigned char riichi_sticks, honba_counter;
     char *players[4];
     int points[4];
@@ -257,9 +258,11 @@ void error_expected(const char *expected, char got) {
 }
 
 int read_line_to_input(void) {
-    char *ret = fgets(input, sizeof(input), stdin);
-    if (input != ret) return -1;
-    if (strncmp(input, "quit", 4) == 0) return -1;
+    char *ret = fgets(buffer, sizeof(buffer), stdin);
+    if (buffer != ret) return -1;
+    input = buffer;
+    while (*input <= ' ') ++input;
+    if (strncasecmp(input, "quit", 4) == 0) return -1;
     return 0;
 }
 
@@ -270,6 +273,17 @@ int get_number(const char *msg) {
         int number = atoi(input);
         if (number < 0) continue;
         return number;
+    }
+}
+
+bool decision(const char *msg) {
+    while (true) {
+        printf("%s", msg);
+        read_line_to_input();
+        if (strncasecmp(input, "yes", 3) == 0)
+            return true;
+        else if (strncasecmp(input, "no", 2) == 0)
+            return false;
     }
 }
 
@@ -294,16 +308,12 @@ retry:
     printf("Round summary: ");
     if (read_line_to_input() < 0) return -1;
     //TODO
-    if (!strncmp(input, "undo", 4)) {
+    if (!strncasecmp(input, "undo", 4)) {
         if (undo(history, game_state) < 0) goto retry;
         return 0;
-    } else if (!strncmp(input, "redo", 4)) {
+    } else if (!strncasecmp(input, "redo", 4)) {
         if (redo(history, game_state) < 0) goto retry;
         return 0;
-    } else if (!strncmp(input, "save", 4)) {
-
-    } else if (!strncmp(input, "load", 4)) {
-
     }
     bool limit_hand = false;
     struct score_info info = {0};
@@ -1003,16 +1013,16 @@ void print_scores(struct score_info *score_info, struct state *state, bool ignor
             case 2:  c = 'W'; break;
             case 3: c = 'N'; break;
         }
-        snprintf(input, sizeof(input), "%s (%c)", name, c);
+        snprintf(buffer, sizeof(buffer), "%s (%c)", name, c);
         int before = state->points[i];
         int after = before + score_info->delta[direction];
         if (ignore_delta) {
-            printf("%-17s  %-6i\n", input, before);
+            printf("%-17s  %-6i\n", buffer, before);
             continue;
         } else if (after == before)
-            printf("%-17s  %-6i  %6c  %-6i\n", input, before, ' ', after);
+            printf("%-17s  %-6i  %6c  %-6i\n", buffer, before, ' ', after);
         else
-            printf("%-17s  %-6i  %+-6i  %-6i\n", input, before, score_info->delta[direction], after);
+            printf("%-17s  %-6i  %+-6i  %-6i\n", buffer, before, score_info->delta[direction], after);
         state->points[i] = after;
     }
 }
@@ -1156,7 +1166,6 @@ int main(void) {
         .num_players = 4,
         .round_wind = EAST,
         .round = 1,
-        .dealer = 0,
         .points = {30000, 30000, 30000, 30000},
     };
     FILE *file = fopen("players.txt", "r");
@@ -1182,6 +1191,47 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
     state.num_players = i;
+    file = fopen("save.txt", "r");
+    bool load = decision("Save file found. Load it? (yes/no): ");
+    if (file && load) {
+        int num, round, sticks, counter;
+        char wind;
+        fscanf(file, "number_of_players = %i \
+                round_wind = %c \
+                round = %i \
+                riichi_sticks = %i \
+                honba_counter = %i \
+                points = {%i, %i, %i, %i}",
+                &num,
+                &wind,
+                &round,
+                &sticks,
+                &counter,
+                &state.points[0],
+                &state.points[1],
+                &state.points[2],
+                &state.points[3]);
+        state.num_players = (unsigned char)num;
+        //printf("num = %i\n", state.num_players);
+        state.round_wind = char_to_direction(wind);
+        //printf("wind = %i\n", (int)state.round_wind);
+        state.round = (unsigned char)round;
+        //printf("round = %i\n", state.round);
+        state.riichi_sticks = (unsigned char)sticks;
+        state.honba_counter = (unsigned char)counter;
+        if (state.num_players < 3 ||
+                state.num_players > 4 ||
+                !is_wind(state.round_wind) ||
+                state.round > 4 ||
+                state.round < 1
+        ) {
+            printf("Error: save file corrupted\n");
+            exit(EXIT_FAILURE);
+        }
+        fclose(file);
+    }
+    if (!load) 
+        system("mv save.txt save.txt.ignore");
     struct state_history history;
     init_state_history(&history, 10);
     push_state(&history, &state);
@@ -1237,4 +1287,19 @@ int main(void) {
         push_state(&history, &state);
     }
     deinit_state_history(&history);
+    if (decision("Do you want to save? (yes/no): ")) {
+        file = fopen("save.txt", "w");
+        if (!file) exit(EXIT_FAILURE);
+        fprintf(file, "number_of_players = %i\nround_wind = %c\nround = %i\nriichi_sticks = %i\nhonba_counter = %i\npoints = {%i, %i, %i, %i}",
+                state.num_players,
+                directions[state.round_wind - EAST][0] + 0x20,
+                state.round,
+                state.riichi_sticks,
+                state.honba_counter,
+                state.points[0],
+                state.points[1],
+                state.points[2],
+                state.points[3]);
+        fclose(file);
+    }
 }
