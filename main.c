@@ -4,8 +4,10 @@
 #include <string.h>
 #include <stdint.h>
 
-char buffer[50];
+#define BUFFER_SIZE 50
+char buffer[BUFFER_SIZE];
 char *input;
+size_t input_size;
 
 #define NUM_YAKU 41
 enum YAKU {
@@ -262,6 +264,7 @@ int read_line_to_input(void) {
     if (buffer != ret) return -1;
     input = buffer;
     while (*input <= ' ') ++input;
+    input_size = BUFFER_SIZE - (int)(input - buffer);
     if (strncasecmp(input, "quit", 4) == 0) return -1;
     return 0;
 }
@@ -318,7 +321,7 @@ retry:
     bool limit_hand = false;
     struct score_info info = {0};
     enum ROUND_SUMMARY state = WINNER;
-    for (int i = 0; i < sizeof(input); ++i) {
+    for (int i = 0; i < input_size; ++i) {
         char c = input[i];
         if (c == ' ') continue;
         if (c == '\n' || c == 0) {
@@ -480,7 +483,7 @@ retry:
     type = true;
     current.type = SEQUENCE;
     if (read_line_to_input() < 0) return -1;
-    for (int i = 0; i < sizeof(input); ++i) {
+    for (int i = 0; i < input_size; ++i) {
         char c = input[i];
         if (!c) break;
         switch (c) {
@@ -557,9 +560,9 @@ retry:
                 if (!value) {
                     if (c == 'd' || c == 'D')
                         value = DRAGON;
-                    else if ('1' <= c && c <= '9')
+                    else if ('1' <= c && c <= '9') {
                         value = c - 48;
-                    else {
+                    } else {
                         printf("Error: invalid specifier %i\n", c);
                         goto retry;
                     }
@@ -569,7 +572,7 @@ retry:
         }
     }
     if (group_idx < 4) {
-        //printf("group_idx = %i\n", group_idx);
+        printf("group_idx = %i\n", group_idx);
         printf("Error: too few groups\n");
         goto retry;
     }
@@ -1192,8 +1195,8 @@ int main(void) {
     }
     state.num_players = i;
     file = fopen("save.txt", "r");
-    bool load = decision("Save file found. Load it? (yes/no): ");
-    if (file && load) {
+    bool load;
+    if (file && (load = decision("Save file found. Load it? (yes/no): "))) {
         int num, round, sticks, counter;
         char wind;
         fscanf(file, "number_of_players = %i \
@@ -1230,7 +1233,7 @@ int main(void) {
         }
         fclose(file);
     }
-    if (!load) 
+    if (file && !load) 
         system("mv save.txt save.txt.ignore");
     struct state_history history;
     init_state_history(&history, 10);
