@@ -26,7 +26,7 @@ round summary:
 entering a hand:
 - provide 4 groups and a pair (or 7 pairs) and winning tile
 - the order of information given about a group is not important (t3b=3bt=bt3 and m9g=gm9 etc.)
-- <group> = <type><tile>
+- \<group\> = <type><tile>
 - <type> = q (quad/kong) | t (triple/pung) | p (pair)
 - <winning_tile> = m<tile> (mahjong)
 - <tile> = [<number> | d (dragon)]<color> | e (east) | s (south) | w (west) | n (north)
