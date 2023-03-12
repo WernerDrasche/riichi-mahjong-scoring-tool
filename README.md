@@ -26,11 +26,11 @@ round summary:
 entering a hand:
 - provide 4 groups and a pair (or 7 pairs) and winning tile
 - the order of information given about a group is not important (t3b=3bt=bt3 and m9g=gm9 etc.)
-- \<group\> = <type><tile>
-- <type> = q (quad/kong) | t (triple/pung) | p (pair)
-- <winning_tile> = m<tile> (mahjong)
-- <tile> = [<number> | d (dragon)]<color> | e (east) | s (south) | w (west) | n (north)
-- <color> = r (red) | b (blue and white dragon) | g (green)
+- \<group\> = \<type\>\<tile\>
+- \<type\> = q (quad/kong) | t (triple/pung) | p (pair)
+- \<winning_tile\> = m\<tile\> (mahjong)
+- \<tile\> = \[\<number\> | d (dragon)\]\<color\> | e (east) | s (south) | w (west) | n (north)
+- \<color\> = r (red) | b (blue and white dragon) | g (green)
 - sequence is the default type so a blue sequence 456 would be written as b4 or 4b
 - to mark any group as open put an o somewhere in the group specification
 - example: tbdo (open triple of blue/white dragon)
