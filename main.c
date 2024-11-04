@@ -563,7 +563,7 @@ retry:
                     else if ('1' <= c && c <= '9') {
                         value = c - 48;
                     } else {
-                        printf("Error: invalid specifier %i\n", c);
+                        printf("Error: invalid specifier %c\n", c);
                         goto retry;
                     }
                 } 
@@ -602,13 +602,6 @@ retry:
             case SEQUENCE:
                 *(uint32_t *)ptr += 0x00010101;       
         }
-        //print_group(current);
-        //putchar('\n');
-        //int32_t tmp0 = *(int32_t *)ptr;
-        //int32_t tmp1 = ~tmp0;
-        //int32_t tmp2 = tmp1 + 0x04040405;
-        //int32_t tmp3 = tmp2 & 0x80808080;
-        //printf("%x, %x, %x, %x, %x\n", tmp4, tmp0, tmp1, tmp2, tmp3);
         if (((~*(int32_t *)ptr) + 0x04040405) & 0x80808080) {
             printf("Error: hand contains more than 4 of a kind\n");
             goto retry;
